@@ -1,0 +1,988 @@
+<!-- ################################################################# -->
+<!--                                                                   -->
+<!--  PRXProofSheet.html                                               -->
+<!--                                                                   -->
+<!--  Read EVENTID-EventProofData.json file and prove its contents     -->
+<!--  are unalterably recorded in the Bitcoin blockchain.              -->
+<!--                                                                   -->
+<!--                                                                   -->
+<!--                                                                   -->
+<!-- ################################################################# -->
+<!--                                                                   -->
+<!--  Format of input data file:                                       -->
+<!--                                                                   -->
+<!--    {                                                              -->
+<!--        eventId: "PEUGQZKP",                                       -->
+<!--        blockType: "bitcoin",                                      -->
+<!--        blockTransactionId: "7f9492a88386993 ...",                 -->
+<!--        blockHashesFullList: [                                     -->
+<!--            "hash1A","hash1B","hash1C",                            -->
+<!--            "hash2A","hash2B",                                     -->
+<!--            "hash3A",                                              -->
+<!--            "hash4A","hash4B","hash4C","hash4D",                   -->
+<!--            ...                                                    -->
+<!--            "hash99999A","hash99999B" ... "hash99999T"             -->
+<!--        ],                                                         -->
+<!--        images: [                                                  -->
+<!--            {                                                      -->
+<!--                filename: "IMG_20180910_094056.jpg",               -->
+<!--                b64encodedImage: "/9j/4UDVRXhpZgAASUkqAA ..."      -->
+<!--            },                                                     -->
+<!--            {                                                      -->
+<!--                filename: "IMG_20180910_094115.jpg",               -->
+<!--                b64encodedImage: "/9j/4S1eRXhpZgAASUkqAA ..."      -->
+<!--            }                                                      -->
+<!--        ]                                                          -->
+<!--    }                                                              -->
+<!--                                                                   -->
+<!--  Hashes are SHA256 hex-encoded, upper-case, dash-separated bytes  -->
+<!--  for example:                                                     -->
+<!--    "1e5ffa4a2e09723287b6b6 ..." is encoded as                     -->
+<!--    "1E-5F-FA-4A-2E-09-72-32-87-B6-B6 ..."                         -->
+<!--                                                                   -->
+<!--  The blockHashesFullList property gives all hashes encoded onto   -->
+<!--  the given bitcoin transaction. The images property contains      -->
+<!--  all images to be proved. The entire image is supplied as base-64 -->
+<!--  encoded data.                                                    -->
+<!--                                                                   -->
+<!--                                                                   -->
+<!--                                                                   -->
+<!-- ################################################################# -->
+<!--                                                                   -->
+<!--  Proof consists of the following:                                 -->
+<!--                                                                   -->
+<!--   1. Demonstrate that the supplied images can be sha256 encoded   -->
+<!--      to a value that is present in the blockHashesFullList.       -->
+<!--                                                                   -->
+<!--   2. Compute the sha256 hash of all hashes in the                 -->
+<!--      blockHashesFullList property, the allBatchHashesSHA.         -->
+<!--                                                                   -->
+<!--   3. Demonstrate that the supplied Bitcoin blockchain contains    -->
+<!--      the computed allBatchHashesSHA using third party services.   -->
+<!--                                                                   -->
+<!--        3A. Search for the allBatchHashesSHA in the blockchain     -->
+<!--            and verify the given tansactionId is returned.         -->
+<!--            see: https://www.smartbit.com.au/api                   -->
+<!--                                                                   -->
+<!--        3B. Search for the given tansactionId and verify the       -->
+<!--            allBatchHashesSHA is returned.                         -->
+<!--            see: https://testnet.blockexplorer.com/api-ref         -->
+<!--                                                                   -->
+<!--                                                                   -->
+
+
+
+<!-- ASDF TODO asdf to do Custom error message for event packages that do not include per-image hashes -->
+<!-- devise a test-case demonstrating this! -->
+
+
+
+<!-- ################################################################# -->
+<!--  Load jQuery from Google. Also load jsSHA (version 2.3.1)         -->
+<!--  for its sha2546sum function. For reference, see:                 -->
+<!--    https://github.com/Caligatio/jsSHA                             -->
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<script src="https://cdn.rawgit.com/Caligatio/jsSHA/master/src/sha256.js"></script>
+
+
+
+
+
+
+<!-- ################################################################# -->
+<!--  Style sheet                                                      -->
+
+<style type="text/css">
+
+    body {
+        font-family: verdana, sans-serif;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    th, td {
+        padding: 0.25rem;
+        border: 1px solid #ccc;
+        font-size: x-small;
+        text-align: center;
+    }
+    tbody tr:nth-child(odd) {
+        background: #eee;
+    }
+
+    .dropzone {
+        background-color: lightgray;
+        border-width: 3px solid-gray;
+        text-align: center;
+        margin: auto;
+        width: 33%;
+    }
+
+    .dropzoneSubtitle {
+        font-size: x-small;
+    }
+
+    .dragInProgress {
+        background-color: lightblue;
+    }
+
+    .toolbar {
+        background-color: #0F0F0F;
+        overflow: hidden;
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        color: white;
+    }
+
+    .pageHeader {
+        font-size: x-large;
+        width: 100%;
+        text-align: center;
+        font-weight: bold;
+    }
+
+    .notIncludedCell {
+        font-style: italic;
+        color: gray;
+    }
+
+    .hashCell {
+        text-align: left;
+        font-family: monospace;
+    }
+
+    .hashCellHeader {
+        text-align: left;
+    }
+
+    .highlightSHA {
+        background-color: yellow;
+    }
+
+    .hashesHeaderButton {
+        font-size: x-small;
+        vertical-align: middle;
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    .apiTableCell {
+        text-align: left;
+    }
+
+    .proofingMessage {
+        text-align: center;
+        font-size: x-large;
+        font-weight: bold;
+    }
+
+    .apiProvedCell {
+        font-size: large;
+    }
+
+
+</style>
+
+
+
+
+<!-- Helper function for logging messages to toolbar or proof message -->
+<script type="text/javascript">
+    var toolbarMsg = function(msg) { $("#toolbar").html(msg); };
+    var proofingMessage = function(msg) { $("#proofingMessage").html(msg); };
+</script>
+
+
+
+
+<!-- Helper function to copy allBatchHashes to clipboard, as text -->
+<script type="text/javascript">
+    var copyHashesToClipboard = function() {
+        // this clipboard helper routine inspired by https://stackoverflow.com/a/30905277/2195752
+        function copyToClipboard(selector){
+          var $temp = $("<div>");
+          $("body").append($temp);
+          $temp.attr("contenteditable", true)
+               .html($(selector).html()).select()
+               .on("focus", function() { document.execCommand('selectAll',false,null) })
+               .focus();
+          document.execCommand("copy");
+          $temp.remove();
+        };
+        copyToClipboard('#allBatchHashesCell');
+    };
+</script>
+
+
+
+
+<!-- Helper function to open a base64-encoded image in a new window -->
+<script type="text/javascript">
+    function openBase64InWindow(data) {
+        var filename = data.match('(.*name=)(.*)(;base64)')[2]; // get filename from data string
+        var w = window.open('about:blank');
+        setTimeout(function() { //FireFox seems to require a setTimeout for this to work.
+            w.document.write('<html><head><title>' + filename + '</title></head><body></body>');
+            var iFrame = w.document.body.appendChild(w.document.createElement('iframe'));
+            iFrame.style = "width: 100%; height: 98%; resize: both; overflow: auto";
+            iFrame.src = data;
+        }, 0);
+    };
+</script>
+
+
+
+
+<!-- Helper function to show/hide the all-hashes row -->
+<script type="text/javascript">
+    var hideAllHashesRow = true;
+    function toggleAllHashesDisplay() {
+        hideAllHashesRow = !hideAllHashesRow;
+        if (hideAllHashesRow) {
+            $('#allBatchHashesRow').addClass('hidden');
+        } else {
+            $('#allBatchHashesRow').removeClass('hidden');
+        }
+    }
+</script>
+
+
+
+
+<!-- Helper functions for computing/displaying sha256 hashes -->
+<script type="text/javascript">
+    var formatSHA256ForDisplay = function(sha256) {
+        return (sha256.
+                    toUpperCase().
+                        replace(/(\S{2})/g,'$1-'). // add a '-' between every two bytes
+                            replace(/-$/,'')); // but remove trailing '-' at end of line
+    };
+    var getSHA256ForBinaryImage = function(binaryData) { return getHexShaForEncodingFormat(binaryData, 'BYTES'); };
+    var getSHA256ForB64Data = function(b64EncodedData) { return getHexShaForEncodingFormat(b64EncodedData, 'B64'); };
+    var getSHAForText = function(textData) { return getHexShaForEncodingFormat(textData, 'TEXT'); };
+    var getHexShaForEncodingFormat = function(data, encodingFormat) {
+        // use the jsSHA package to compute sha-256 sum
+        var shaObj = new jsSHA('SHA-256', encodingFormat);  // encoding format must be HEX, B64, BYTES, or ARRAYBUFFER
+        shaObj.update(data);
+        return shaObj.getHash('HEX');
+    };
+</script>
+
+
+
+
+
+<!-- ################################################################# -->
+<!--                                                                   -->
+<!--  Proof sheet with drag/drop capability                            -->
+
+<html class="defaultTypeface">
+
+    <head>
+        <title>PEIRMOBILE.COM Event Proof Sheet</title>
+    </head>
+
+    <body>
+
+
+        <!-- ################################################################# -->
+        <!--                                                                   -->
+        <!-- START OF HTML MARKUP                                              -->
+        <!--                                                                   -->
+
+
+
+        <div class="pageHeader">
+            <br>
+            PEIRMOBILE.COM Event Proof Sheet
+            <br><br><br>
+        </div>
+
+
+        <div id="toolbar" class="toolbar">
+            Loading jquery from Google CDN <!-- Default toolbar message -->
+        </div>
+
+
+        <script type="text/javascript">
+            $(document).ready(function(){
+                toolbarMsg('&nbsp');
+            });
+        </script>
+
+
+
+        <div id="eventDropzone" class="dropzone card">
+            <br><br><br><br>
+            Drag and drop event proof<br>
+            <br>
+            data json file, here.<br>
+            <br><br><br><br>
+        </div>
+
+
+        <div class="proofingMessage">
+            <br><br>
+            <span id="proofingMessage"></span>
+            <br>
+        </div>
+
+
+        <!-- Images thumbnails and hashes table -->
+        <div>
+            <br><br><br>
+            <table id="imageTable" class="zebra">
+                <thead></thead>
+                <tbody></tbody>
+                <tfoot></tfoot>
+            </table>
+            <br><br><br>
+        </div>
+
+
+        <!-- blockexplorer.com table -->
+        <div>
+            <br><br><br>
+            <table id="beTable" class="zebra">
+                <thead></thead>
+                <tbody></tbody>
+                <tfoot></tfoot>
+            </table>
+            <br><br><br>
+        </div>
+
+
+        <!-- smartbit.com.au table -->
+        <div>
+            <br><br><br>
+            <table id="sbTable" class="zebra">
+                <thead></thead>
+                <tbody></tbody>
+                <tfoot></tfoot>
+            </table>
+            <br><br><br>
+        </div>
+
+
+        <!--                                                                   -->
+        <!-- END OF HTML MARKUP                                                -->
+        <!--                                                                   -->
+        <!-- ################################################################# -->
+
+
+
+
+
+
+
+
+        <!-- ################################################################# -->
+        <!--                                                                   -->
+        <!--  Code to process event-proof data json file                       -->
+        <!--                                                                   -->
+
+        <script type="text/javascript">
+
+
+            ///////////////////////////////////////////////////////////////////
+            // prefix for all bitcoin transaction data
+            const PEIRMOBILEDOTCOM_HEX_PREFIX = '504549524d4f42494c452e434f4d'; // i.e. simply 'PEIRMOBILE.COM' in hex representation
+
+
+
+            ///////////////////////////////////////////////////////////////////
+            // variable to store how many proof failures have occurred.
+            // we use two techniques in case one online site is down, so only
+            // both failures will result in a failure message.
+            var atLeastOneProofFound = false;
+
+
+
+            ///////////////////////////////////////////////////////////////////
+            // Handle drag and drop
+
+            // make blue glow on drag over
+            $("#eventDropzone").on("dragover", function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                $(this).addClass('dragInProgress'); // highlight dropbox
+            });
+
+            // remove blue glow on draw leave
+            $("#eventDropzone").on("dragleave", function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                $(this).removeClass('dragInProgress'); // remove dropbox highlight
+            });
+
+            // handle the actual drop
+            $("#eventDropzone").on("drop", function(dropEvent) {
+                dropEvent.preventDefault();
+                dropEvent.stopPropagation();
+                $(this).removeClass('dragInProgress'); // remove blue glow once drag is dropped
+
+                // try to get filename out of dropped object
+                var files = [];
+                if (dropEvent != undefined && dropEvent.originalEvent != undefined && dropEvent.originalEvent.dataTransfer.files != undefined) {
+                    files = dropEvent.originalEvent.dataTransfer.files;
+                }
+                if (files.length != 1) {
+                    toolbarMsg('ERROR: You must drag one "event-proof data json file" here.');
+                } else {
+                    // got one filename, so try to read it as a data json file
+                    var file = files[0];
+                    var filename = file.name;
+                    toolbarMsg('Reading file "' + filename + '"');
+                    var fileReader = new FileReader();
+                    fileReader.onload = function(fileReadEvent) {
+                        try {
+                            // decode and parse dropped data from JSON to a native object
+                            var rawDropData = fileReadEvent.target.result;
+                            var b64EncodedDropData = rawDropData.split(',')[1];
+                            var binaryDropData = atob(b64EncodedDropData);
+                            var parsedDropData = JSON.parse(binaryDropData);
+
+                            // validate the file is not just JSON, but the appropriate JSON
+                            var validationErrMsg = validateDroppedData(parsedDropData);
+                            if (validationErrMsg != null) {
+                                toolbarMsg(validationErrMsg);
+                            } else {
+                                // sucessfully parsed dropped file as data json, invoke processing function
+                                toolbarMsg('Successfully read data from file "' + filename + '"');
+                                processDroppedData(parsedDropData);
+                            }
+                        } catch (err) {
+                            toolbarMsg('ERROR: parsing data. You must drag one "event-proof data json file" here. ' + err);
+                        }
+                    };
+                    fileReader.readAsDataURL(file);
+                }
+            });
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // validate event-proof data json file. return null if format appears legit.
+            // Also decodes b64-encoded image data back to native object.
+            var validateDroppedData = function(proofData) {
+                if (proofData.eventId == undefined) { return 'parameter "eventId" not found'; }
+                if (proofData.blockType == undefined) { return 'parameter "blockType" not found'; }
+                if (proofData.blockType != 'bitcoin') { return 'block type "' + proofData.blockType + '" not supported. Only "bitcoin" is supported at this time.'; }
+                if (proofData.blockTransactionId == undefined) { return 'parameter "blockTransactionId" not found'; }
+                if (proofData.blockHashesFullList == undefined) { return 'parameter "blockHashesFullList" not found'; }
+                if (proofData.blockHashesFullList.length == undefined) { return 'parameter "blockHashesFullList" not an array'; }
+                if (proofData.blockHashesFullList.length < 1) { return 'parameter "blockHashesFullList" zero length'; }
+                if (proofData.images == undefined) { return 'parameter "images" not found'; }
+                if (proofData.images.length == undefined) { return 'parameter "images" not an array'; }
+                if (proofData.images.length < 1) { return 'parameter "images" zero length'; }
+                for (var i in proofData.images) {
+                    var eachImage = proofData.images[i];
+                    if (eachImage.filename == undefined) { return 'parameter "image[' + i + '].filename" not found'; }
+                    if (eachImage.b64encodedImage == undefined) { return 'parameter "image[' + i + '].b64encodedImage" not found'; }
+                    try {
+                        // decode the image (which is in b64 encoding) to ensure encoding is valid.
+                        // the decoded data is not actually needed because the jsSHA package can
+                        // compute the sha256 from the raw b64-encoded data.
+                        atob(eachImage.b64encodedImage);
+                    } catch (err) {
+                        return 'Error decoding image #' + i + ', "' + eachImage.filename + '". ' + err;
+                    }
+                }
+                return null; // null indicates no error
+            };
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // show eventId in dropzone
+            var showEventIdAndResetDisplay = function(eventId) {
+                var dropZoneMessage =
+                    '<br><br><br><br>' +
+                    'EVENT ' + eventId +
+                    '<br><br><br><br>' +
+                    '<span class="dropzoneSubtitle">drag and drop new event proof data json file, here.</span>' +
+                    '<br><br><br><br>';
+
+                // change dropzone text
+                $('#eventDropzone').html(dropZoneMessage);
+
+                // clear image table header, body and footer
+                $('#imageTableHeaderRow').empty();
+                $('#imageTable > tbody').empty();
+                $('#imageTableFooterRow').empty();
+
+                // clear blockexplorer table header
+                $('#beTableHeaderRow').empty();
+                $('#beTable > tbody').empty();
+                $('#beTableFooterRow').empty();
+
+                // clear blockexplorer table header
+                $('#sbTableHeaderRow').empty();
+                $('#sbTable > tbody').empty();
+                $('#sbTableFooterRow').empty();
+            };
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // function to compute blockchain data from list of all image hashes included
+            // in this block. Each event has 1 to 20 comma-separated image hashes. Each block
+            // contains 1 to thousands of events. The proofData.blockHashesFullList gives all
+            // image hashes for all events in this block. This function computes the data stored
+            // in the block on the biitcoin blockchain by computing the hash-of-all-hashes.
+            var getSHA256ForHashList = function(hashList) {
+                var newline = '\u000A'; // this is equivalent to '\n' in javascript, but I'm using 0X0A explicitly, for clarity (aka line-feed, aka ctrl-j, aka newline)
+                var fullHashesJoined = hashList.join(newline); // this joins all image hatches in the transaction batch using a single newline character
+                fullHashesJoined += newline; // add a trailing newline to the last "row", i.e. the last hash in the list
+                return getSHAForText(fullHashesJoined);
+            };
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // compute the full bitcoin data, which is simply the peirmobile prefix plus the allBatchHashesSHA
+            var getFullBitcoinData = function(allBatchHashesSHA) {
+                return PEIRMOBILEDOTCOM_HEX_PREFIX + allBatchHashesSHA;
+                // for test file `PEUGQZKP-EventProofData.json`, s/b: 504549524d4f42494c452e434f4d2850e14fb098f5a8bff6ce93293e2d228110ef9821a26129f5d3e86466af6b0f
+                // which is simply:                                   P E I R M O B I L E . C O M 2850e14fb098f5a8bff6ce93293e2d228110ef9821a26129f5d3e86466af6b0f
+            };
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // compute and save sha256 for all images in proof data file. verify that each
+            // computed hash is present in the blockHashesFullList and raise exception if not.
+            var computeSha256ForAllImagesAndVerify = function(imageList, blockHashesFullList) {
+                var hashListContainsHash = function(hashesList, hash) {
+                    var formattedHash = formatSHA256ForDisplay(hash);
+                    for (var j in hashesList) {
+                        var hashSubList = hashesList[j].split(',');
+                        if (hashSubList.includes(formattedHash)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                for (var i in imageList) {
+                    var eachImage = imageList[i];
+                    eachImage.imageSHA256 = getSHA256ForB64Data(eachImage.b64encodedImage);
+                    // console.log(eachImage.filename + ' sha256sum = ' + eachImage.imageSHA256);
+                    if (!hashListContainsHash(blockHashesFullList, eachImage.imageSHA256)) {
+                        var errMsg = 'cannot find hash for image "' + eachImage.filename + '", "' + eachImage.imageSHA256 + '", in data.blockHashesFullList';
+                        throw errMsg;
+                    }
+                }
+            };
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // Build image and hashes table with one row for each image, optional allHashes
+            // rows and highlighting of matches.
+            var buildHashesAndImageTable = function(fullBitcoinData, allBatchHashesSHA, blockHashesFullList, imageList) {
+
+                var tableHeader = $('#imageTable > thead');
+                var tableBody = $('#imageTable > tbody');
+                var tableFooter = $('#imageTable > tfoot');
+
+                tableHeader.empty();
+                tableHeader.append(
+                    '<tr id="imageTableHeaderRow">' +
+                        '<th id="thumbnailHeaderCell">Thumbnail</th>' +
+                        '<th>Image Name</th>' +
+                        '<th class="hashCellHeader">Image Hash</th>' +
+                    '</tr>'
+                );
+
+                // add yellow highlighting to the actual hashData (i.e. everything but the peirmobile.com  prefix)
+                fullBitcoinDataDisplayText = formatSHA256ForDisplay(fullBitcoinData).replace(formatSHA256ForDisplay(allBatchHashesSHA), '<span  class="highlightSHA">' + formatSHA256ForDisplay(allBatchHashesSHA) + '</span>');
+                tableFooter.empty();
+                tableFooter.append(
+                    '<tr id="imageTableFooterRow">' +
+                        '<th></th>' +
+                        '<th>Hash of Batch Hashes</th>' +
+                        '<th id="allHashesCell" class="hashCellFooter">' + fullBitcoinDataDisplayText + '</th>' +
+                    '</tr>'
+                );
+                $("#allHashesCell").attr('title', 'Highlighted text shows the sha256 hash of all batch constituent hashes. The full hash includes our "PEIRMOBILE.COM" prefix, as stored in the blockchain.');
+
+                // variable to display all batch hashes, convert newlines into breaks
+                var displayHashesString = blockHashesFullList.join('<br>');
+                displayHashesString += '<br><br>'; // actual block data has a trailing newline so add this break, too
+
+                // add all thumbnails and individual image hash rows
+                for (var i in imageList) {
+                    var eachImage = imageList[i];
+                    var filename = eachImage.filename;
+                    var filenameBase = filename.split('.')[0];
+                    var imageUrl = 'data:image/jpg;name=' + filename + ';base64,' + eachImage.b64encodedImage;
+                    var imageHash = formatSHA256ForDisplay(eachImage.imageSHA256);
+                    var rowHTML =
+                        '<tr>' +
+                            '<td onclick="openBase64InWindow(\'' + imageUrl + '\')"><img height="64" alt="' + filename + '" download="' + filename + '" src="' + imageUrl + '" /></td>' +
+                            '<td>' + filename + '</td>' +
+                            '<td class="hashCell">' + imageHash + '</td>' +
+                        '</tr>';
+                    tableBody.append(rowHTML);
+
+                    // boldface the text within the batch hashes list
+                    var highlightedImageHash = '<span id="' + filenameBase + '" class="highlightSHA">' + imageHash + '</span>';
+                    displayHashesString = displayHashesString.replace(imageHash, highlightedImageHash);
+                }
+
+                tableBody.append(
+                    '<tr>' +
+                        '<th></th>' +
+                        '<th></th>' +
+                        '<th id="allHashesHeaderCell" class="hashCellHeader">' +
+                            'All Hashes for Blockchain Batch' +
+                            '&nbsp <button id="showHideButton" class="hashesHeaderButton" onclick="toggleAllHashesDisplay()">show/hide</button>' +
+                            '&nbsp <button id="clipboardButton" class="hashesHeaderButton" onclick="copyHashesToClipboard()">copy to clipboard</button>' +
+                            '</th>' +
+                    '</tr>'
+                );
+                $("#showHideButton").attr('title', 'Click here to hide/show all batch hashes. Your individual image hashes will be highlighted.');
+                $("#clipboardButton").attr('title', 'Click here to copy all batch hashes. You may paste and save that list as a file, to prove the SHA256 "Hash of Batch Hashes" for yourself.');
+                $("#thumbnailHeaderCell").attr('title', 'Click an image thumbnail to open in a new window. You may right-click either this thumbnail or the full-size image and select "Save image as..." to save the image as a file, to prove the SHA256 "Image Hash" for yourself.');
+
+                tableBody.append(
+                    '<tr id="allBatchHashesRow" class="hidden">' +
+                        '<td></td>' +
+                        '<td></td>' +
+                        '<td id="allBatchHashesCell" class="hashCell">' + displayHashesString + '</td>' +
+                    '</tr>'
+                );
+
+                // add hover text for highlighted hashes
+                for (var i in imageList) {
+                    var filename = imageList[i].filename;
+                    var filenameBase = filename.split('.')[0];
+                    var id = '#' + filenameBase;
+                    var e = $(id);
+                    e.attr('title', 'Hash for ' + filename);
+                }
+
+            };
+
+
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // use www.smartbit.com.au to search for the op-return data, and report on the
+            // txnid if found. see: https://www.smartbit.com.au/api
+            var confirmTransactionByData = function(txnid, opReturnData) {
+                // this URL will return the basic transaction info/json by searching for hash data
+                var opReturnSearchUrl = 'https://api.smartbit.com.au/v1/blockchain/search?q=' + opReturnData;
+
+                var showProofFailedIfNecessary = function() {
+                    if (!atLeastOneProofFound) {
+                        proofingMessage('Proof Failed!');
+                    }
+                };
+
+                // helper to get transaction from smartbit.com.au results, matching txnid and opreturndata
+                var getTxnFromResults = function(results, txnid, opReturnData) {
+                    for (var i in results) {
+                        var eachResultData = results[i].data;
+                        if (eachResultData != undefined && eachResultData.script != undefined) {
+                            var resultData = eachResultData.script.replace('OP_RETURN ', '');
+                            var resultTxnid = eachResultData.txid;
+                            if (resultTxnid == txnid && resultData == opReturnData) {
+                                return eachResultData;
+                            }
+                        }
+                    }
+                    throw ('Error reading smartbit.com.au, no matching txn found.');
+                };
+
+                // read smartbit.com.au asynchronously using ajax
+                $.ajax( { url: opReturnSearchUrl, success: function(result, status, xhr) {
+                    // ajax request succeeded
+                    if (status != 'success') {
+                        showProofFailedIfNecessary();
+                        toolbarMsg('Error reading transaction at smartbit.com.au, status: "' + status + '", result: ' + JSON.stringify(result));
+                    } else if (result == null || result.success == undefined || result.success != true || result.results == undefined || result.results.length == 0) {
+                        showProofFailedIfNecessary();
+                        toolbarMsg('Error searching for data at smartbit.com.au, result: ' + JSON.stringify(result));
+                    } else {
+                        try {
+                            // return value seems good, check for matching op-return data
+                            var txnData = getTxnFromResults(result.results, txnid, opReturnData);
+                            atLeastOneProofFound = true;
+                            proofingMessage('Proof Data');
+                            toolbarMsg('Successfully read transaction at smartbit.com.au');
+                            displaySmartbitReturnData(opReturnSearchUrl, txnData, opReturnData);
+                        } catch (err) {
+                            showProofFailedIfNecessary();
+                            toolbarMsg('Error processing transaction from smartbit.com.au, error: ' + err);
+                        }
+                    }
+
+                }, error: function(xhr, status, error) {
+                    // ajax request failed, error message is buried, but not in `error` parameter, for weird reasons...
+                    var errMsg = status;
+                    if (xhr != undefined &&
+                        xhr.responseText != undefined &&
+                        xhr.responseText.Message != undefined)
+                    {
+                            errMsg = xhr.responseText.Message;
+                    }
+                    showProofFailedIfNecessary();
+                    toolbarMsg('Error searching for transaction data at smartbit.com.au, error: ' + errMsg);
+                }} );
+            };
+
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // use blockexplorer.com to get transaction by id, and verify eventBlockData
+            // is present in the op-return data.
+            var confirmTransactionByTxnid = function(txnid, eventBlockData) {
+                // this URL will return the full transaction info/json by searching for txnid
+                // see: https://testnet.blockexplorer.com/api-ref
+
+                // helper to return get the OP_RETURN data from a txn
+                var getOpReturnDataFromTxn = function(txn) {
+                    for (var i in txn.vout) {
+                        var eachVout = txn.vout[i];
+                        if (eachVout.scriptPubKey != undefined &&
+                            eachVout.scriptPubKey.asm != undefined &&
+                            eachVout.scriptPubKey.asm.startsWith('OP_RETURN '))
+                        {
+                            return eachVout.scriptPubKey.asm.split('OP_RETURN ')[1];  // strip the transaction data-type prefix
+                        }
+                    }
+                    throw('Error reading blockexplorer.com, no op_return data found on txn ' + txnid);
+                };
+
+                var showProofFailedIfNecessary = function() {
+                    if (!atLeastOneProofFound) {
+                        proofingMessage('Proof Failed!');
+                    }
+                };
+
+                var txnInfoUrl = 'https://blockexplorer.com/api/tx/' + txnid;
+                $.ajax( { url: txnInfoUrl, success: function(result, status, xhr) {
+                    // ajax request succeeded
+                    var txn = result; // already parsed json
+                    if (status != 'success') {
+                        showProofFailedIfNecessary();
+                        toolbarMsg('Error reading transaction at blockexplorer.com, status: "' + status + '", result: ' + JSON.stringify(result));
+                    } else if (result == null || result.txid == undefined) {
+                        showProofFailedIfNecessary();
+                        toolbarMsg('Error reading transaction at blockexplorer.com, no txid received, result: ' + JSON.stringify(result));
+                    } else if (result.txid != txnid) {
+                        showProofFailedIfNecessary();
+                        toolbarMsg('Error reading transaction at blockexplorer.com, wrong txid received, requested: "' + txnid + '" but received "' + result.txid + '"');
+                    } else {
+                        try {
+                            // return value seems good, check for matching op-return data
+                            var opReturnData = getOpReturnDataFromTxn(txn);
+                            if (opReturnData != eventBlockData) {
+                                showProofFailedIfNecessary();
+                                toolbarMsg('Error reading transaction at blockexplorer.com, wrong op_return received, expected: "' + eventBlockData + '" but received "' + opReturnData + '"');
+                            } else {
+                                atLeastOneProofFound = true;
+                                proofingMessage('Proof Data');
+                                toolbarMsg('Successfully read transaction at blockexplorer.com');
+                                displayBlockExplorerReturnData(txnInfoUrl, txn, opReturnData);
+                            }
+                        } catch (err) {
+                            showProofFailedIfNecessary();
+                            toolbarMsg('Error processing transaction from blockexplorer.com, error: ' + err);
+                        }
+                    }
+
+                }, error: function(xhr, status, error) {
+                    // ajax request failed, error message is buried, but not in `error` parameter, for weird reasons...
+                    var errMsg = status;
+                    if (xhr != undefined &&
+                        xhr.responseText != undefined &&
+                        xhr.responseText.Message != undefined)
+                    {
+                            errMsg = xhr.responseText.Message;
+                    }
+                    showProofFailedIfNecessary();
+                    toolbarMsg('Error searching for transaction data at blockexplorer.com, error: ' + errMsg);
+                }} );
+            };
+
+
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // display blockexplorer.com return data, when it is valid
+            var displayBlockExplorerReturnData = function(beUrl, txn, opReturnData) {
+                try {
+                    var txnid = txn.txid;
+                    var blockTimeUTC = new Date(txn.blocktime * 1000);
+                    var blockNumber = txn.blockheight;
+                    var confirmationCount = txn.confirmations;
+                    var formattedDateTime = blockTimeUTC.toISOString().replace('T', ' ').split('.')[0] + ' UTC';
+                    var formattedUrl = '<a href="' + beUrl + '" target="_blank">' + beUrl + '</a>';
+                    var tableHeader = $('#beTable > thead');
+                    var tableBody = $('#beTable > tbody');
+                    var tableFooter = $('#beTable > tfoot');
+
+                    tableHeader.empty();
+                    tableHeader.append(
+                        '<tr id="beTableHeaderRow">' +
+                            '<th></th>' +
+                            '<th class="apiProvedCell">confirmation #1: bitcoin transaction id and data found at blockexplorer.com</th>' +
+                        '</tr>'
+                    );
+
+                    tableBody.append( '<tr><td class="apiTableCell">URL address</td>            <td class="apiTableCell">' + formattedUrl      + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">bitcoin transaction id</td> <td class="apiTableCell">' + txnid             + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">timestamp</td>              <td class="apiTableCell">' + formattedDateTime + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">block number</td>           <td class="apiTableCell">' + blockNumber       + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">confirmations</td>          <td class="apiTableCell">' + confirmationCount + '</td></tr>' );
+
+                    var prefixLength = PEIRMOBILEDOTCOM_HEX_PREFIX.length;
+                    var prefixFormatted = formatSHA256ForDisplay(opReturnData.substring(0, prefixLength));
+                    var suffixFormatted = formatSHA256ForDisplay(opReturnData.substring(prefixLength, 1E6));
+                    var formattedOpReturnData = prefixFormatted + '-' + '<span  class="highlightSHA">' + suffixFormatted + '</span>';
+                    tableFooter.empty();
+                    tableFooter.append(
+                        '<tr id="beTableFooterRow">' +
+                            '<td class="apiTableCell">blockchain data</td>' +
+                            '<th class="apiTableCell">' + formattedOpReturnData + '</th>' +
+                        '</tr>'
+                    );
+
+                } catch (err) {
+                    toolbarMsg('Error displaying transaction data from blockexplorer.com, error: ' + err);
+                }
+            };
+
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // display smartbit.com.au return data, when it is valid
+            var displaySmartbitReturnData = function(sbUrl, resultData, opReturnData) {
+                try {
+                    var txnid = resultData.txid;
+                    var formattedUrl = '<a href="' + sbUrl + '" target="_blank">' + sbUrl + '</a>';
+                    var tableHeader = $('#sbTable > thead');
+                    var tableBody = $('#sbTable > tbody');
+                    var tableFooter = $('#sbTable > tfoot');
+
+                    tableHeader.empty();
+                    tableHeader.append(
+                        '<tr id="sbTableHeaderRow">' +
+                            '<th></th>' +
+                            '<th class="apiProvedCell">confirmation #2: data and txnid found at smartbit.com.au</th>' +
+                        '</tr>'
+                    );
+
+                    tableBody.append( '<tr><td class="apiTableCell">URL address</td>            <td class="apiTableCell">' + formattedUrl      + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">bitcoin transaction id</td> <td class="apiTableCell">' + txnid             + '</td></tr>' );
+
+                    var prefixLength = PEIRMOBILEDOTCOM_HEX_PREFIX.length;
+                    var prefixFormatted = formatSHA256ForDisplay(opReturnData.substring(0, prefixLength));
+                    var suffixFormatted = formatSHA256ForDisplay(opReturnData.substring(prefixLength, 1E6));
+                    var formattedOpReturnData = prefixFormatted + '-' + '<span  class="highlightSHA">' + suffixFormatted + '</span>';
+                    tableFooter.empty();
+                    tableFooter.append(
+                        '<tr id="sbTableFooterRow">' +
+                            '<td class="apiTableCell">blockchain data</td>' +
+                            '<th class="apiTableCell">' + formattedOpReturnData + '</th>' +
+                        '</tr>'
+                    );
+
+                } catch (err) {
+                    toolbarMsg('Error displaying transaction data from smartbit.com.au, error: ' + err);
+                }
+            };
+
+
+
+
+
+            ///////////////////////////////////////////////////////////////////////////////
+            // process data file
+            var processDroppedData = function(proofData) {
+                // console.group('Event-proof data json object'); console.log(proofData); console.groupEnd();
+                try {
+
+                    // status message - proof in process
+                    // display eventId name in dropzone
+                    proofingMessage('Proof in process...');
+                    showEventIdAndResetDisplay(proofData.eventId);
+
+                    // PROOF STEP 1...
+
+                    // compute and save SHA256 for all images in proofdata list
+                    // this is proof step #1. If each image hash is not found in the
+                    // blockHashesFullList, and exception will be thrown because
+                    // we have failed the first test of the proof.
+                    var foundAllImageHashes = computeSha256ForAllImagesAndVerify(proofData.images, proofData.blockHashesFullList);
+
+                    // PROOF STEP 2...
+
+                    // compute hash of all hashes, i.e. the allBatchHashesSHA
+                    // also get the full bitcoin data, which is simply the
+                    // peirmobile prefix plus the allBatchHashesSHA
+                    var allBatchHashesSHA = getSHA256ForHashList(proofData.blockHashesFullList);
+                    var fullBitcoinData = getFullBitcoinData(allBatchHashesSHA);
+
+                    // display image table (all images with thumbnail and hash,
+                    // plus optional expandable allHashes section). This is
+                    // proof step #2, that we obtain a hash-of-all-hashes for
+                    // the entire blockchain batch (which was demonstrated in
+                    // step #1 to include the hash of the images in question).
+                    buildHashesAndImageTable(fullBitcoinData, allBatchHashesSHA, proofData.blockHashesFullList, proofData.images);
+
+                    // PROOF STEP 3A...
+
+                    // use blockexplorer.com to get transaction by id, and verify
+                    // fullBitcoinData in op-return data. This is proof step #3A,
+                    // using blockexplorer.com to confirm the hash-of-all-hashes
+                    // is present on the given bitcoin blockchain transactionId
+                    confirmTransactionByTxnid(proofData.blockTransactionId, fullBitcoinData);
+
+                    // PROOF STEP 3B...
+
+                    // use smartbit.com to get transaction by op-return data,
+                    // and verify transaction id. This is proof step #3B,
+                    // using smartbit.com to confirm the hash-of-all-hashes is
+                    // found somewhere in the bitcoin blockchain, and that it
+                    // is found with the given transactionId.
+                    confirmTransactionByData(proofData.blockTransactionId, fullBitcoinData);
+
+
+                } catch (err) {
+                    // Catch all exceptions
+                    proofingMessage('Proof failed!');
+                    toolbarMsg('Error processing event-proof data json file. ' + err);
+                }
+            };
+
+
+
+        </script>
+
+
+    </body>
+
+
+</html>
