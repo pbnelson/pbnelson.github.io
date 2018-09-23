@@ -57,16 +57,16 @@
 <!--   2. Compute the sha256 hash of all hashes in the                 -->
 <!--      blockHashesFullList property, the allBatchHashesSHA.         -->
 <!--                                                                   -->
-<!--   3. Demonstrate that the supplied Bitcoin blockchain contains    -->
+<!--   3. Demonstrate that the Bitcoin blockchain contains             -->
 <!--      the computed allBatchHashesSHA using third party services.   -->
 <!--                                                                   -->
-<!--        3A. Search for the allBatchHashesSHA in the blockchain     -->
-<!--            and verify the given tansactionId is returned.         -->
-<!--            see: https://www.smartbit.com.au/api                   -->
-<!--                                                                   -->
-<!--        3B. Search for the given tansactionId and verify the       -->
+<!--        3A. Search for the given tansactionId and verify the       -->
 <!--            allBatchHashesSHA is returned.                         -->
 <!--            see: https://testnet.blockexplorer.com/api-ref         -->
+<!--                                                                   -->
+<!--        3B. Search for the allBatchHashesSHA in the blockchain     -->
+<!--            and verify the given tansactionId is returned.         -->
+<!--            see: https://www.smartbit.com.au/api                   -->
 <!--                                                                   -->
 <!--                                                                   -->
 
@@ -74,6 +74,14 @@
 
 <!-- ASDF TODO asdf to do Custom error message for event packages that do not include per-image hashes -->
 <!-- devise a test-case demonstrating this! -->
+
+<!-- ASDF TODO asdf todo put the timestamp into the dropZone under the eventId -->
+
+<!-- ASDF TODO asdf todo make prettier buttons -->
+
+<!-- ASDF TODO asdf todo make popup hover text over confirmation highlighted hash -->
+
+
 
 
 
@@ -97,16 +105,20 @@
     body {
         font-family: verdana, sans-serif;
     }
+
     table {
         border-collapse: collapse;
         width: 100%;
     }
+
     th, td {
         padding: 0.25rem;
         border: 1px solid #ccc;
         font-size: x-small;
         text-align: center;
     }
+
+    /* this creates the "zebra" striping on the tables */
     tbody tr:nth-child(odd) {
         background: #eee;
     }
@@ -141,11 +153,6 @@
         width: 100%;
         text-align: center;
         font-weight: bold;
-    }
-
-    .notIncludedCell {
-        font-style: italic;
-        color: gray;
     }
 
     .hashCell {
@@ -184,10 +191,17 @@
         font-size: large;
     }
 
-
 </style>
 
 
+
+
+<!-- Helper function to display text on the toolbar -->
+<script type="text/javascript">
+    $(document).ready(function(){
+        toolbarMsg('&nbsp');
+    });
+</script>
 
 
 <!-- Helper function for logging messages to toolbar or proof message -->
@@ -195,8 +209,6 @@
     var toolbarMsg = function(msg) { $("#toolbar").html(msg); };
     var proofingMessage = function(msg) { $("#proofingMessage").html(msg); };
 </script>
-
-
 
 
 <!-- Helper function to copy allBatchHashes to clipboard, as text -->
@@ -218,8 +230,6 @@
 </script>
 
 
-
-
 <!-- Helper function to open a base64-encoded image in a new window -->
 <script type="text/javascript">
     function openBase64InWindow(data) {
@@ -235,8 +245,6 @@
 </script>
 
 
-
-
 <!-- Helper function to show/hide the all-hashes row -->
 <script type="text/javascript">
     var hideAllHashesRow = true;
@@ -249,8 +257,6 @@
         }
     }
 </script>
-
-
 
 
 <!-- Helper functions for computing/displaying sha256 hashes -->
@@ -308,14 +314,7 @@
         </div>
 
 
-        <script type="text/javascript">
-            $(document).ready(function(){
-                toolbarMsg('&nbsp');
-            });
-        </script>
-
-
-
+        <!-- drag and drop region -->
         <div id="eventDropzone" class="dropzone card">
             <br><br><br><br>
             Drag and drop event proof<br>
@@ -332,7 +331,7 @@
         </div>
 
 
-        <!-- Images thumbnails and hashes table -->
+        <!-- image thumbnails and hashes table -->
         <div>
             <br><br><br>
             <table id="imageTable" class="zebra">
@@ -540,7 +539,7 @@
             var getSHA256ForHashList = function(hashList) {
                 var newline = '\u000A'; // this is equivalent to '\n' in javascript, but I'm using 0X0A explicitly, for clarity (aka line-feed, aka ctrl-j, aka newline)
                 var fullHashesJoined = hashList.join(newline); // this joins all image hatches in the transaction batch using a single newline character
-                fullHashesJoined += newline; // add a trailing newline to the last "row", i.e. the last hash in the list
+                fullHashesJoined += newline; // add a trailing newline to the last "row", i.e. the last hash in the list. this is critical for obtaining the same hash-of-hashes used in the blockchain.
                 return getSHAForText(fullHashesJoined);
             };
 
@@ -678,8 +677,6 @@
 
 
 
-
-
             ///////////////////////////////////////////////////////////////////////////////
             // use www.smartbit.com.au to search for the op-return data, and report on the
             // txnid if found. see: https://www.smartbit.com.au/api
@@ -741,10 +738,9 @@
                             errMsg = xhr.responseText.Message;
                     }
                     showProofFailedIfNecessary();
-                    toolbarMsg('Error searching for transaction data at smartbit.com.au, error: ' + errMsg);
+                    toolbarMsg('Error searching for blockchain data at smartbit.com.au, error: ' + errMsg);
                 }} );
             };
-
 
 
 
@@ -804,7 +800,7 @@
                             }
                         } catch (err) {
                             showProofFailedIfNecessary();
-                            toolbarMsg('Error processing transaction from blockexplorer.com, error: ' + err);
+                            toolbarMsg('Error retrieving transaction from blockexplorer.com, error: ' + err);
                         }
                     }
 
@@ -821,8 +817,6 @@
                     toolbarMsg('Error searching for transaction data at blockexplorer.com, error: ' + errMsg);
                 }} );
             };
-
-
 
 
 
@@ -875,7 +869,6 @@
 
 
 
-
             ///////////////////////////////////////////////////////////////////////////////
             // display smartbit.com.au return data, when it is valid
             var displaySmartbitReturnData = function(sbUrl, resultData, opReturnData) {
@@ -890,7 +883,7 @@
                     tableHeader.append(
                         '<tr id="sbTableHeaderRow">' +
                             '<th></th>' +
-                            '<th class="apiProvedCell">confirmation #2: data and txnid found at smartbit.com.au</th>' +
+                            '<th class="apiProvedCell">confirmation #2: data and transaction id found at smartbit.com.au</th>' +
                         '</tr>'
                     );
 
@@ -913,7 +906,6 @@
                     toolbarMsg('Error displaying transaction data from smartbit.com.au, error: ' + err);
                 }
             };
-
 
 
 
