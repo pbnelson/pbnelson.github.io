@@ -2,6 +2,8 @@
 <!--                                                                   -->
 <!--  PRXProofSheet.html                                               -->
 <!--                                                                   -->
+<!--  Version 0.1, 24SEP2018 by peirmobile.com                         -->
+<!--                                                                   -->
 <!--  Read EVENTID-EventProofData.json file and prove its contents     -->
 <!--  are unalterably recorded in the Bitcoin blockchain.              -->
 <!--                                                                   -->
@@ -51,7 +53,7 @@
 <!--                                                                   -->
 <!--  Proof consists of the following:                                 -->
 <!--                                                                   -->
-<!--   1. Demonstrate that the supplied images can be sha256 encoded   -->
+<!--   1. Demonstrate that each supplied image can be sha256 encoded   -->
 <!--      to a value that is present in the blockHashesFullList.       -->
 <!--                                                                   -->
 <!--   2. Compute the sha256 hash of all hashes in the                 -->
@@ -71,15 +73,6 @@
 <!--                                                                   -->
 
 
-
-<!-- ASDF TODO asdf to do Custom error message for event packages that do not include per-image hashes -->
-<!-- devise a test-case demonstrating this! -->
-
-<!-- ASDF TODO asdf todo put the timestamp into the dropZone under the eventId -->
-
-<!-- ASDF TODO asdf todo make prettier buttons -->
-
-<!-- ASDF TODO asdf todo make popup hover text over confirmation highlighted hash -->
 
 
 
@@ -129,14 +122,29 @@
         text-align: center;
         margin: auto;
         width: 33%;
+        border-radius: 10px;
     }
 
     .dropzoneSubtitle {
         font-size: x-small;
+        font-style: italic;
+    }
+
+    .dropZoneEventDateTime {
+        font-size: small;
+        font-weight: bold;
     }
 
     .dragInProgress {
         background-color: lightblue;
+    }
+
+    .proofSucceeded {
+        background-color: palegreen;
+    }
+
+    .btcTxnid {
+        background-color: palegreen;
     }
 
     .toolbar {
@@ -171,6 +179,13 @@
     .hashesHeaderButton {
         font-size: x-small;
         vertical-align: middle;
+        border-radius: 3px;
+        background: floralwhite;
+        box-shadow: none;
+        border-width: 1px;
+        /*color: palegreen;*/
+        border-style: solid solid solid solid;
+        border-color: khaki;
     }
 
     .hidden {
@@ -289,7 +304,7 @@
 <html class="defaultTypeface">
 
     <head>
-        <title>PEIRMOBILE.COM Event Proof Sheet</title>
+        <title>PEIRMOBILE.COM Event Proof Data Sheet</title>
     </head>
 
     <body>
@@ -304,13 +319,13 @@
 
         <div class="pageHeader">
             <br>
-            PEIRMOBILE.COM Event Proof Sheet
+            PEIRMOBILE.COM Event Proof Data Sheet
             <br><br><br>
         </div>
 
 
         <div id="toolbar" class="toolbar">
-            Loading jquery from Google CDN <!-- Default toolbar message -->
+            Loading jquery from Google CDN, and jsSHA(256) from Github CDN<!-- Default toolbar message -->
         </div>
 
 
@@ -409,6 +424,7 @@
                 event.preventDefault();
                 event.stopPropagation();
                 $(this).addClass('dragInProgress'); // highlight dropbox
+                if (atLeastOneProofFound) { $(this).removeClass('proofSucceeded'); }
             });
 
             // remove blue glow on draw leave
@@ -416,6 +432,7 @@
                 event.preventDefault();
                 event.stopPropagation();
                 $(this).removeClass('dragInProgress'); // remove dropbox highlight
+                if (atLeastOneProofFound) { $(this).addClass('proofSucceeded'); }
             });
 
             // handle the actual drop
@@ -503,10 +520,11 @@
             var showEventIdAndResetDisplay = function(eventId) {
                 var dropZoneMessage =
                     '<br><br><br><br>' +
-                    'EVENT ' + eventId +
-                    '<br><br><br><br>' +
-                    '<span class="dropzoneSubtitle">drag and drop new event proof data json file, here.</span>' +
-                    '<br><br><br><br>';
+                    'EVENT ' + eventId + '<br><br>' +
+                    '<span id="eventDateTime" class="dropZoneEventDateTime"></span><br>' +
+                    '<br><br><br>' +
+                    '<span class="dropzoneSubtitle">drag and drop new event proof data json file, here.</span><br>' +
+                    '<br>';
 
                 // change dropzone text
                 $('#eventDropzone').html(dropZoneMessage);
@@ -614,7 +632,7 @@
                         '<th id="allHashesCell" class="hashCellFooter">' + fullBitcoinDataDisplayText + '</th>' +
                     '</tr>'
                 );
-                $("#allHashesCell").attr('title', 'Highlighted text shows the sha256 hash of all batch constituent hashes. The full hash includes our "PEIRMOBILE.COM" prefix, as stored in the blockchain.');
+                $("#allHashesCell").attr('title', 'Highlighted text shows the SHA-256 hash of all batch constituent hashes. The full hash includes our "PEIRMOBILE.COM" prefix, as stored in the blockchain.');
 
                 // variable to display all batch hashes, convert newlines into breaks
                 var displayHashesString = blockHashesFullList.join('<br>');
@@ -652,8 +670,8 @@
                     '</tr>'
                 );
                 $("#showHideButton").attr('title', 'Click here to hide/show all batch hashes. Your individual image hashes will be highlighted.');
-                $("#clipboardButton").attr('title', 'Click here to copy all batch hashes. You may paste and save that list as a file, to prove the SHA256 "Hash of Batch Hashes" for yourself.');
-                $("#thumbnailHeaderCell").attr('title', 'Click an image thumbnail to open in a new window. You may right-click either this thumbnail or the full-size image and select "Save image as..." to save the image as a file, to prove the SHA256 "Image Hash" for yourself.');
+                $("#clipboardButton").attr('title', 'Click here to copy all batch hashes. You may paste and save that list as a file and prove the SHA-256 "Hash of Batch Hashes" for yourself.');
+                $("#thumbnailHeaderCell").attr('title', 'Click an image thumbnail to open in a new window. You may right-click either this thumbnail or the full-size image and select "Save image as..." to save the raw image file and prove the SHA-256 "Image Hash" for yourself. https://md5file.com/calculator is a convenient online resource for this purpose.');
 
                 tableBody.append(
                     '<tr id="allBatchHashesRow" class="hidden">' +
@@ -680,7 +698,7 @@
             ///////////////////////////////////////////////////////////////////////////////
             // use www.smartbit.com.au to search for the op-return data, and report on the
             // txnid if found. see: https://www.smartbit.com.au/api
-            var confirmTransactionByData = function(txnid, opReturnData) {
+            var confirmTransactionByOpReturnData = function(txnid, opReturnData) {
                 // this URL will return the basic transaction info/json by searching for hash data
                 var opReturnSearchUrl = 'https://api.smartbit.com.au/v1/blockchain/search?q=' + opReturnData;
 
@@ -720,6 +738,7 @@
                             var txnData = getTxnFromResults(result.results, txnid, opReturnData);
                             atLeastOneProofFound = true;
                             proofingMessage('Proof Data');
+                            $('#eventDropzone').addClass('proofSucceeded'); // turn dropZone green
                             toolbarMsg('Successfully read transaction at smartbit.com.au');
                             displaySmartbitReturnData(opReturnSearchUrl, txnData, opReturnData);
                         } catch (err) {
@@ -795,6 +814,7 @@
                             } else {
                                 atLeastOneProofFound = true;
                                 proofingMessage('Proof Data');
+                                $('#eventDropzone').addClass('proofSucceeded'); // turn dropZone green
                                 toolbarMsg('Successfully read transaction at blockexplorer.com');
                                 displayBlockExplorerReturnData(txnInfoUrl, txn, opReturnData);
                             }
@@ -835,16 +855,20 @@
                     var tableBody = $('#beTable > tbody');
                     var tableFooter = $('#beTable > tfoot');
 
+                    // update dropZone "event blockchain datetime" field
+                    $('#eventDateTime').html('proved blockchain timestamp<br>' + formattedDateTime);
+
+                    // display blockexplorer table data
                     tableHeader.empty();
                     tableHeader.append(
                         '<tr id="beTableHeaderRow">' +
                             '<th></th>' +
-                            '<th class="apiProvedCell">confirmation #1: bitcoin transaction id and data found at blockexplorer.com</th>' +
+                            '<th class="apiProvedCell">confirmation (a) bitcoin txid &rArr; data, found at <a href="' + beUrl + '">blockexplorer.com</a></th>' +
                         '</tr>'
                     );
 
-                    tableBody.append( '<tr><td class="apiTableCell">URL address</td>            <td class="apiTableCell">' + formattedUrl      + '</td></tr>' );
-                    tableBody.append( '<tr><td class="apiTableCell">bitcoin transaction id</td> <td class="apiTableCell">' + txnid             + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">API URL address</td>        <td class="apiTableCell">' + formattedUrl      + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">bitcoin transaction id</td> <td class="apiTableCell"><span class="btcTxnid">' + txnid + '</span></td></tr>' );
                     tableBody.append( '<tr><td class="apiTableCell">timestamp</td>              <td class="apiTableCell">' + formattedDateTime + '</td></tr>' );
                     tableBody.append( '<tr><td class="apiTableCell">block number</td>           <td class="apiTableCell">' + blockNumber       + '</td></tr>' );
                     tableBody.append( '<tr><td class="apiTableCell">confirmations</td>          <td class="apiTableCell">' + confirmationCount + '</td></tr>' );
@@ -857,9 +881,12 @@
                     tableFooter.append(
                         '<tr id="beTableFooterRow">' +
                             '<td class="apiTableCell">blockchain data</td>' +
-                            '<th class="apiTableCell">' + formattedOpReturnData + '</th>' +
+                            '<th id="beRetrievedOpReturnData" class="apiTableCell">' + formattedOpReturnData + '</th>' +
                         '</tr>'
                     );
+
+                    // set floatover text for blockchain data
+                    $('#beRetrievedOpReturnData').attr('title', 'Retrieved matching "Hash of Batch Hashes" from online blockchain search.');
 
                 } catch (err) {
                     toolbarMsg('Error displaying transaction data from blockexplorer.com, error: ' + err);
@@ -883,12 +910,12 @@
                     tableHeader.append(
                         '<tr id="sbTableHeaderRow">' +
                             '<th></th>' +
-                            '<th class="apiProvedCell">confirmation #2: data and transaction id found at smartbit.com.au</th>' +
+                            '<th class="apiProvedCell">confirmation (b) blockchain data &rArr; bitcoin txid, found at <a href="' + sbUrl + '">smartbit.com.au</a></th>' +
                         '</tr>'
                     );
 
-                    tableBody.append( '<tr><td class="apiTableCell">URL address</td>            <td class="apiTableCell">' + formattedUrl      + '</td></tr>' );
-                    tableBody.append( '<tr><td class="apiTableCell">bitcoin transaction id</td> <td class="apiTableCell">' + txnid             + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">API URL address</td><td class="apiTableCell">' + formattedUrl + '</td></tr>' );
+                    tableBody.append( '<tr><td class="apiTableCell">bitcoin transaction id</td><td class="apiTableCell"><span class="btcTxnid">' + txnid + '</span></td></tr>' );
 
                     var prefixLength = PEIRMOBILEDOTCOM_HEX_PREFIX.length;
                     var prefixFormatted = formatSHA256ForDisplay(opReturnData.substring(0, prefixLength));
@@ -898,10 +925,12 @@
                     tableFooter.append(
                         '<tr id="sbTableFooterRow">' +
                             '<td class="apiTableCell">blockchain data</td>' +
-                            '<th class="apiTableCell">' + formattedOpReturnData + '</th>' +
+                            '<th id="sbRetrievedOpReturnData" class="apiTableCell">' + formattedOpReturnData + '</th>' +
                         '</tr>'
                     );
 
+                    // set floatover text for blockchain data
+                    $('#sbRetrievedOpReturnData').attr('title', 'Retrieved matching "Hash of Batch Hashes" from online blockchain search.');
                 } catch (err) {
                     toolbarMsg('Error displaying transaction data from smartbit.com.au, error: ' + err);
                 }
@@ -916,8 +945,10 @@
                 // console.group('Event-proof data json object'); console.log(proofData); console.groupEnd();
                 try {
 
+                    // Reset the display of all information
                     // status message - proof in process
                     // display eventId name in dropzone
+                    atLeastOneProofFound = false; // need to reset in case this is a follow-on drag/drop
                     proofingMessage('Proof in process...');
                     showEventIdAndResetDisplay(proofData.eventId);
 
@@ -959,7 +990,7 @@
                     // using smartbit.com to confirm the hash-of-all-hashes is
                     // found somewhere in the bitcoin blockchain, and that it
                     // is found with the given transactionId.
-                    confirmTransactionByData(proofData.blockTransactionId, fullBitcoinData);
+                    confirmTransactionByOpReturnData(proofData.blockTransactionId, fullBitcoinData);
 
 
                 } catch (err) {
