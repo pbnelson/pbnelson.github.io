@@ -10,6 +10,11 @@ TODO INCREASE INPUT FIELD SIZE A LITTLE
 
 TODO IMPROVE ICON
 
+TODO HOST ON LARAVEL WEBSERVER!
+
+NOTE: GITHUB PAGES THROWS ERROR: Refused to display 'https://raw.githubusercontent.com/pbnelson/pbnelson.github.io/master/index.html?et=' in a frame because it set 'X-Frame-Options' to 'deny'.
+
+       MANAGE ADD-IN WITH THIS URL TO REPLICATE: https://raw.githubusercontent.com/pbnelson/pbnelson.github.io/master/manifest.xml
 -->
 
 
@@ -332,15 +337,10 @@ TODO IMPROVE ICON
     <script>
 
         // setup listener to run main() when document is loaded and ready
-        // $(document).ready(function() {
-        //     Office.initialize = function() { main(); } // office addins need this second-level of "ready"
-        // });
+        $(document).ready(function() {
+            Office.initialize = function() { main(); } // office addins need this second-level of "ready"
+        });
 
-        Office.initialize = function(reason) {
-            $(document).ready(function() {
-                main();
-            });
-        };
 
 
 
