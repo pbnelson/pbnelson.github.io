@@ -8,6 +8,8 @@ TODO GET RID OF THE TOOLBAR?
 
 TODO INCREASE INPUT FIELD SIZE A LITTLE
 
+TODO IMPROVE ICON
+
 -->
 
 
@@ -330,9 +332,16 @@ TODO INCREASE INPUT FIELD SIZE A LITTLE
     <script>
 
         // setup listener to run main() when document is loaded and ready
-        $(document).ready(function() {
-            Office.initialize = function() { main(); } // office addins need this second-level of "ready"
-        });
+        // $(document).ready(function() {
+        //     Office.initialize = function() { main(); } // office addins need this second-level of "ready"
+        // });
+
+        Office.initialize = function(reason) {
+            $(document).ready(function() {
+                main();
+            });
+        };
+
 
 
         // main function, runs when document loaded
