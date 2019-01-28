@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+
+
+
+<!-- ################################################################# -->
+<!--                                                                   -->
+<!-- PHOTECTOR add-in for Outlook - create One-Time Events             -->
+<!--                                                                   -->
+<!-- All this code is UI-specific, getting and validating the          -->
+<!-- login credentials and other required input fields.                -->
+<!--                                                                   -->
+<!-- To review just the "pure API" call, see the                       -->
+<!-- photector_api_ote.js script                                       -->
+<!--                                                                   -->
+
+
+
+
+<!-- ################################################################# -->
+<!-- Load the Photector One-Time Event API                             -->
+<!--                                                                   -->
+<!-- SERVER_LIST is a constant defined in photector_api_ote.js. It     -->
+<!-- contains the urls and keys for dev vs. prod servers,              -->
+<!-- provided by photector.                                            -->
+<!--                                                                   -->
+
+<script src="photector_api_ote.js"></script>
+<script src="credentials.js">
+    var SERVER = SERVER_LIST['dev']; // default in this demo is for 'dev'
+</script>
+
+
+
+
+
+<!-- ################################################################# -->
+<!--                                                                   -->
+<!-- HTML head                                                         -->
+<!--                                                                   -->
+
+<html>
+<head>
+
+    <!-- ################################################################# -->
+    <!-- Style sheet                                                       -->
+    <link rel="stylesheet" type="text/css" href="index.css" media="screen" />
+
+    <!-- ################################################################# -->
+    <!-- Load jQuery from Google's CDN                                     -->
+    <!-- See: https://blog.jquery.com/category/jquery/                     -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+    <!-- ################################################################# -->
+    <!-- AES is used to encrypt/decrypt PHOTECTOR login data for cookie    -->
+    <!-- See: https://cdnjs.com/libraries/crypto-js                        -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.2/rollups/aes.js"></script>
+
+    <!-- ################################################################# -->
+    <!-- This is used to generate a QR code image                          -->
+    <!-- See: https://larsjung.de/jquery-qrcode/                           -->
+    <script src="https://cdn.jsdelivr.net/gh/lrsjng/jquery-qrcode/dist/jquery-qrcode.min.js"></script>
+
+    <!-- ################################################################# -->
+    <!-- Title and metadata                                                -->
+    <title>PHOTECTOR OTE DEMO</title>
+    <meta charset="UTF-8" />
+</head>
+
+
+
+
+
+<!-- ################################################################# -->
+<!-- HTML body                                                         -->
+
+<body>
+
+    <!-- Title Label -->
+    <label class="titleStyle">Create a New One-Time Event</label>
+
+    <p>
+        You can create a new one-Time Event by sending an email or text/SMS
+        message to people who do not have a PHOTECTOR account. This lets them
+        download PHOTECTOR and create an event on your behalf. Once they
+        download, capture, and submit the event it will be immediately
+        available to you on your dashboard.
+    </p>
+
+    <!-- username/password credential login fields -->
+    <p class="blue--text">
+        Enter your PHOTECTOR username and password
+    </p>
+    <p>
+        <input id="input_username" type="text" value="" placeholder="Username">
+        <label id="username_valiText" class="validationLabel invisible">required</label>
+        <br>
+
+        <input id="input_password" type="password" value="" placeholder="Password">
+        <label id="password_valiText" class="validationLabel invisible">required</label>
+        <br>
+
+        <input id="input_rememberme" type="checkbox" value="" placeholder="">Remember Me
+        <button id="logoutButton" class="logoutButtonStyle">logout</button>
+    </p>
+
+    <!-- All event creation data-entry fields -->
+    <p class="blue--text">
+        <br>
+        Fill in these fields to create a new One-Time Event
+    </p>
+
+    <input id="input_description" type="text" value="" placeholder="Event Description">
+    <label id="description_valiText" class="validationLabel invisible">required</label>
+    <br>
+
+    <input id="input_name" type="text" value="" placeholder="Recipient Full Name">
+    <label id="name_valiText" class="validationLabel invisible">required</label>
+    <br>
+
+    <input id="input_email" type="text" value="" placeholder="Optional Recipient Email">
+    <label id="email_infoText"     class="fieldInformationLabel invisible">Sending email notice</label>
+    <label id="email_requiredText" class="validationLabel       invisible">required if phone is blank</label>
+    <label id="email_valiText"     class="validationLabel       invisible">Invalid email</label>
+    <br>
+
+    <input id="input_phone" type="text" value="" placeholder="Optional SMS/Phone #">
+    <label id="phone_infoText"     class="fieldInformationLabel invisible">Sending SMS notice</label>
+    <label id="phone_requiredText" class="validationLabel       invisible">required if email is blank</label>
+    <label id="phone_valiText"     class="validationLabel       invisible">Invalid phone number</label>
+    <label id="phone_disabledText" class="validationLabel       invisible">Won't phone with email</label>
+    <br>
+
+    <input id="input_tags" type="text" value="" placeholder="Optional Event Tags">
+    <label id="tags_valiText" class="validationLabel invisible">up 20 optional tags</label>
+    <br>
+
+    <input id="input_expires" type="text" value="" placeholder="Optional Expiry Date">
+    <span>
+        <label id="expires_valiText"       class="validationLabel invisible">optional mm/dd/yyyy</label>
+        <label id="expiresFuture_valiText" class="validationLabel invisible">must be future date</label>
+    </span>
+    <br>
+
+    <!-- submit button -->
+    <br>
+    <button id="createOTEButton" class="createButton">SUBMIT ONE-TIME CODE</button>
+
+    <!-- Select dev/prod server -->
+    <div id="devOrProd">
+        <label>Server:</label>
+        <!-- radio list 'value' must match variable name in SERVER_LIST constant, above -->
+        <label class="container">
+            <input type="radio" name="devOrProd" id="devButton" value="dev" checked="checked">
+            Dev
+        </label>
+        <label class="container">
+            <input type="radio" name="devOrProd" id="prodButton" value="prod">
+            Prod
+        </label>
+    </div>
+
+
+
+    <!-- ################################################################# -->
+    <!--                                                                   -->
+    <!-- This HTML is made visible when the OTE is successfully created.   -->
+    <!--                                                                   -->
+
+    <div id="newOTEInformation" class="invisible">
+
+        <br>
+        <br>
+        <br>
+
+        <div class="newOTEInformationStyle">
+
+            <b>Your New One-Time Event Code: <label id="hashId"></label></b><br>
+            Recipient web-link to your One-Time Event:
+            <a id="oteLinkHref" target="_blank" href="">
+                <label id="oteLinkText"></label>
+            </a>
+            <br>
+            QR-Code for recipient web-link:<br>
+            <br>
+            <div id="oteQrCode"></div><br>
+
+        </div>
+    </div>
+
+
+
+    <!-- ################################################################# -->
+    <!--                                                                   -->
+    <!-- status toolbar, with default message                              -->
+    <!--                                                                   -->
+
+    <div id="toolbar" class="toolbar">
+        Loading page...
+    </div>
+
+
+<!--                                                                   -->
+<!-- End of HTML                                                       -->
+<!--                                                                   -->
+<!-- ################################################################# -->
+
+
+
+
+
+
+
+<!-- ################################################################# -->
+<!--                                                                   -->
+<!--   UI Program Code                                                 -->
+<!--                                                                   -->
+<!--   This code stores login in a cookie, validates data entry,       -->
+<!--   displays the results, and does all the other fancy user-        -->
+<!--   interface control. The actual work of logging in and creating   -->
+<!--   a OTE through the API is done by the two simple functions       -->
+<!--   in the photector_api_ote.js script.                             -->
+<!--                                                                   -->
+
+<script>
+
+
+
+// run main() when document is loaded and ready
+$(document).ready(function() { main(); });
+
+
+
+// main function, runs when document loaded
+var main = function() {
+    clearToolbarMsg();
+    setServerTypeDevOrProd();
+    setupListeners();
+    loadPhotectorLoginCredentials();
+    validateDataFields();
+};
+
+
+
+// setup event listeners for button click events and input data entry
+var setupListeners = function() {
+    $('#createOTEButton').on('click', createOTE);
+    $('#input_rememberme').change(savePhotectorLoginCredentials);
+    $('#logoutButton').on('click', logoutPhotector);
+    $('#devOrProd').on('click', setServerTypeDevOrProdAndSaveCredentials);
+
+    var addValidationListener = function(list) {
+        for (var i in list) {
+            var eachElementName = list[i];
+            $(list[i]).keypress(validateDataFieldsHandler);
+            $(list[i]).keydown(validateDataFieldsHandler);
+            $(list[i]).keyup(validateDataFieldsHandler);
+            $(list[i]).change(validateDataFieldsHandler);
+            $(list[i]).focusout(validateDataFieldsHandler);
+            $(list[i]).select(validateDataFieldsHandler);
+        }
+    };
+    addValidationListener(
+    [
+        '#input_username',
+        '#input_password',
+        '#input_name',
+        '#input_email',
+        '#input_phone',
+        '#input_description',
+        '#input_tags',
+        '#input_expires'
+    ]);
+};
+
+
+// Helper functions for logging messages to toolbar or proof message
+var toolbarMsg = function(msg) { $("#toolbar").html(msg); };
+var clearToolbarMsg = function() { toolbarMsg(''); };
+
+// whenever dev/prod is clicked, set SERVER respectively, then save cookie
+var setServerTypeDevOrProdAndSaveCredentials = function() {
+    setServerTypeDevOrProd();
+    savePhotectorLoginCredentials();
+};
+
+// set server type to dev or prod, based on radio button
+var setServerTypeDevOrProd = function() {
+    var devOrProd = $('input[name=devOrProd]:checked').val();
+    SERVER = SERVER_LIST[devOrProd];
+};
+
+
+// load saved login credentials from cookie
+var loadPhotectorLoginCredentials = function() {
+    var ePlc = getCookie('plc');
+    if (ePlc != null) {
+        var bytes = CryptoJS.AES.decrypt(ePlc.toString(),
+            '(!)photectorotenl998'); // decode encrypted cookie
+        var dPlc = bytes.toString(CryptoJS.enc.Utf8);
+        stringList = dPlc.split(':plc:');
+        var username = stringList[1];
+        var password = stringList[2];
+        var rememberMeChecked = stringList[3] == 'true';
+        var devOrProd = stringList[4];
+        $('#input_username').val(username);
+        $('#input_password').val(password);
+        $('#input_rememberme').prop('checked', rememberMeChecked);
+        if (devOrProd == 'prod') {
+            $('input:radio[name=devOrProd]').filter('[value=prod]').
+                prop('checked', true);
+        } else {
+            $('input:radio[name=devOrProd]').filter('[value=dev]').
+                prop('checked', true);
+        }
+        setServerTypeDevOrProd();
+        if (rememberMeChecked) {
+            clearToolbarMsg();
+        } else {
+            toolbarMsg('You must enter PHOTECTOR username/password');
+        }
+    } else {
+        toolbarMsg('You must enter PHOTECTOR username/password')
+    }
+};
+
+
+// clear credentials from screen and cookie
+var logoutPhotector = function() {
+    $('#input_username').val('');
+    $('#input_password').val('');
+    $('#input_rememberme').prop('checked', false);
+    savePhotectorLoginCredentials();
+    loadPhotectorLoginCredentials();
+    validateDataFields();
+};
+
+
+// save credentials in cookie (or save empty strings if rememberMe is unchecked)
+var savePhotectorLoginCredentials = function() {
+    var username = $('#input_username').val();
+    var password = $('#input_password').val();
+    var rememberMeChecked = $('#input_rememberme').prop('checked');
+    var devOrProd = $('input[name=devOrProd]:checked').val();
+    if (!rememberMeChecked) {
+        username = '';
+        password = '';
+    }
+
+    var delim = ':plc:';
+    var plc = 'alpha' + delim +
+        username + delim +
+        password + delim +
+        rememberMeChecked + delim +
+        devOrProd + delim +
+        'beta';
+    var ePlc = CryptoJS.AES.encrypt(plc,
+        '(!)photectorotenl998'). // encrypt so we don't save plaintext in cookie
+        toString();
+    setCookie('plc', ePlc, 60); // expire in 60 days
+};
+
+
+// cookie set/get functions taken from
+// https://www.w3schools.com/js/js_cookies.asp
+var setCookie = function(cname, cvalue, exdays) {
+    var d = new Date();
+    d.setTime(d.getTime() + (exdays*24*60*60*1000));
+    var expires = "expires="+ d.toUTCString();
+    document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+};
+var getCookie = function(cname) {
+    var name = cname + "=";
+    var decodedCookie = decodeURIComponent(document.cookie);
+    var ca = decodedCookie.split(';');
+    for(var i = 0; i <ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0) == ' ') {
+            c = c.substring(1);
+        }
+        if (c.indexOf(name) == 0) {
+            return c.substring(name.length, c.length);
+        }
+    }
+    return '';
+};
+
+
+// get named "get" parameters out of a URL
+// inspired by: https://stackoverflow.com/a/25359264/2195752
+var parseUrlParameter = function(url, parameter){
+    var results = new RegExp('[\?&]' + parameter + '=([^&#]*)').exec(url);
+    if (results == null) { return null; }
+    return decodeURI(results[1]) || 0;
+};
+
+
+// this jquery event handler must NOT return any value, so it simply
+// wraps the validateDataFields() function but without a return();
+var validateDataFieldsHandler = function() { validateDataFields(); }
+
+// edit checks on all fields. if all are valid the submit button is enabled
+var validateDataFields = function() {
+
+    // email parser inspired by: https://stackoverflow.com/a/2855946/2195752
+    var isValidEmailAddress = function (emailAddress) {
+        var pattern = /^([a-z\d!#$%&'*+\-\/=?^_`{|}~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+(\.[a-z\d!#$%&'*+\-\/=?^_`{|}~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]+)*|"((([ \t]*\r\n)?[ \t]+)?([\x01-\x08\x0b\x0c\x0e-\x1f\x7f\x21\x23-\x5b\x5d-\x7e\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|\\[\x01-\x09\x0b\x0c\x0d-\x7f\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]))*(([ \t]*\r\n)?[ \t]+)?")@(([a-z\d\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|[a-z\d\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF][a-z\d\-._~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]*[a-z\d\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])\.)+([a-z\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]|[a-z\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF][a-z\d\-._~\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF]*[a-z\u00A0-\uD7FF\uF900-\uFDCF\uFDF0-\uFFEF])\.?$/i;
+        return pattern.test(emailAddress);
+    };
+
+    var wordListValidator20 = function(x) {
+        return (x.split(' ').length <= 20);
+    };
+
+    var nonBlankValidator = function(x) {
+        return (x != undefined && x.length != undefined && x.length != 0);
+    };
+
+    var dateValidator = function(x) {
+        return (!isNaN(Date.parse(x)));
+    };
+
+    var dateInFutureValidator = function(x) {
+        var d = new Date(Date.parse(x));
+        var now = new Date();
+        return (d > now);
+    };
+
+    var phoneNumValidator = function(x) {
+        if (x == null || x.length == null || x.length == 0) { return true; } // allowed to be empty
+        var isValid = /^[0-9.\-\(\)\ \+]*$/.test(x); // pass only numbers, parenthesis, period, plus-sign and space
+        return (isValid);
+    };
+
+    var validateField = function(inputFieldname, flagElementname, validationFunction, invertValiText) {
+        try {
+            var inputString = $(inputFieldname).val();
+            var isValid = validationFunction(inputString);
+            var addRemoveFunction = null;
+            if      (!invertValiText &&  isValid) { addRemoveFunction = function(className) { $(flagElementname).addClass(   className); }; }
+            else if (!invertValiText && !isValid) { addRemoveFunction = function(className) { $(flagElementname).removeClass(className); }; }
+            else if ( invertValiText &&  isValid) { addRemoveFunction = function(className) { $(flagElementname).removeClass(className); }; }
+            else if ( invertValiText && !isValid) { addRemoveFunction = function(className) { $(flagElementname).addClass(   className); }; }
+            addRemoveFunction('invisible');
+            return (isValid);
+        } catch (err) {
+            return false;
+        }
+    };
+
+    // validate every data entry field, keeping an overall validity flag
+    var valid = true;
+    valid &= validateField('#input_username'   , '#username_valiText'      , nonBlankValidator      );
+    valid &= validateField('#input_password'   , '#password_valiText'      , nonBlankValidator      );
+    valid &= validateField('#input_name'       , '#name_valiText'          , nonBlankValidator      );
+    valid &= validateField('#input_description', '#description_valiText'   , nonBlankValidator      );
+    valid &= validateField('#input_tags'       , '#tags_valiText'          , wordListValidator20    );
+    valid &= validateField('#input_phone'      , '#phone_valiText'         , phoneNumValidator      );
+    valid &= validateField('#input_expires'    , '#expires_valiText'       , function(x) { return (!nonBlankValidator(x) |  dateValidator(x)                            ); } );
+    valid &= validateField('#input_expires'    , '#expiresFuture_valiText' , function(x) { return (!nonBlankValidator(x) | !dateValidator(x) | dateInFutureValidator(x) ); } );
+    valid &= validateField('#input_email'      , '#email_valiText'         , function(x) { return (!nonBlankValidator(x) |  isValidEmailAddress(x)                      ); } );
+
+    // special code to show phone_infoText message if it is valid
+    var phone = $('#input_phone').val();
+    if (nonBlankValidator(phone) &  phoneNumValidator(phone)) {
+        $('#phone_infoText').removeClass('invisible');
+    } else {
+        $('#phone_infoText').addClass('invisible');
+    }
+
+    // special code to show email_infoText message if it is valid
+    var email = $('#input_email').val();
+    if (nonBlankValidator(email) &  isValidEmailAddress(email)) {
+        $('#email_infoText').removeClass('invisible');
+    } else {
+        $('#email_infoText').addClass('invisible');
+    }
+
+    // special code to show "required" message if both email
+    // and phone are blank
+    if (!nonBlankValidator(phone) && !nonBlankValidator(email)) {
+        $('#phone_requiredText').removeClass('invisible');
+        $('#email_requiredText').removeClass('invisible');
+    } else {
+        $('#phone_requiredText').addClass('invisible');
+        $('#email_requiredText').addClass('invisible');
+    }
+
+    // special code to show phone_disabledText if email is entered
+    // because for the time being the API will not send an
+    // SMS text message if an email is provided.
+    if (nonBlankValidator(phone) && nonBlankValidator(email)) {
+        $('#phone_infoText').addClass('invisible');
+        $('#phone_disabledText').removeClass('invisible');
+    } else {
+        $('#phone_disabledText').addClass('invisible');
+    }
+
+    // enable/disable submit button if fields are validated
+    if (valid) {
+        $('#createOTEButton').prop('disabled', false);
+        clearToolbarMsg();
+        return true;
+    } else {
+        $('#createOTEButton').prop('disabled', true);
+        toolbarMsg('Enter required fields');
+        return false;
+    }
+};
+
+
+// re-display date input field in standardized date format mm/dd/yyyy, for display only
+var reformatExpiresDate = function() {
+    var dateElement = $('#input_expires');
+    var dateString = dateElement.val();
+    if (dateString != undefined && dateString.length != undefined && dateString.length > 0) {
+        var d = new Date(Date.parse(dateString));
+        var z = function(x) { return ('0'.repeat(2-(''+x).length) + x); };
+        var newDateString = z(d.getMonth() + 1) + '/' + z(d.getDate()) + '/' + d.getFullYear();
+        dateElement.val(newDateString);
+    }
+};
+
+
+
+
+///////////////////////////////////////////////////////////////////////
+//
+// createOTE()
+//
+// Creates the one-time event, first by logging in and getting an auth-token,
+// then by using the authtoken in the API to generate a one-time-event.
+//
+
+// this just validates the data input, clears the toolbar, etc.
+var createOTE = function() {
+    clearToolbarMsg();
+    savePhotectorLoginCredentials();
+    if (validateDataFields()) {
+        hideNewOTEInformationSection();
+        reformatExpiresDate(); // display expiry date in uniform format
+        toolbarMsg('Logging in...');
+        loginAndGetApiAccessToken(function(access_token) {
+            toolbarMsg('Login succeeded, creating OTE...');
+            generateOte(access_token, function(oteData) {
+                processNewlyCreatedOTE(oteData);
+            });
+        });
+    }
+};
+
+
+
+
+///////////////////////////////////////////////////////////////////////
+//
+// loginAndGetApiAccessToken()
+//
+// Login and get accessToken required for all further API requests.
+// Reads properties off the HTML page, and invokes the
+// apiRequest_loginAndGetApiAccessToken() function from
+// photector_api_ote.js
+
+var loginAndGetApiAccessToken = function(successCallback) {
+    apiRequest_loginAndGetApiAccessToken(
+        SERVER.LOGIN_URL,
+        SERVER.CLIENT_ID,
+        SERVER.CLIENT_SECRET,
+        $('#input_username').val(),
+        $('#input_password').val(),
+        function(data) {
+            successCallback(data)
+        },
+        function(err) {
+            console.group('Error logging in');
+            console.error(err);
+            console.groupEnd();
+            var errMsg = err.statusText;
+            if (err.responseJSON != undefined && err.responseJSON.message != undefined) {
+                errMsg = err.responseJSON.message;  // optional english
+            }
+            toolbarMsg('Error logging in: ' + errMsg);
+        }
+    );
+};
+
+
+
+
+///////////////////////////////////////////////////////////////////////
+//
+// request_generateOte()
+//
+// Invoke API request to generate the OTE.
+// Reads properties off the HTML page, and invokes the
+// apiRequest_loginAndGetApiAccessToken() function from
+// photector_api_ote.js
+
+var generateOte = function(accessToken, successCallback) {
+
+    apiRequest_generateOte(
+        SERVER.OTE_URL,
+        accessToken,
+        $('#input_name').val(),
+        $('#input_description').val(),
+        $('#input_expires').val(),
+        $('#input_tags').val().split(' '), // need an array of strings
+        $('#input_email').val(),
+        $('#input_phone').val(),
+        function(data) {
+            successCallback(data)
+        },
+        function(err) {
+            console.group('Error creating OTE');
+            console.error(err);
+            console.groupEnd();
+
+            // parse human-readable text out of the err object
+            var errMsg = err.statusText;
+            if (err.responseJSON != undefined &&
+                err.responseJSON.message != undefined)
+            {
+                errMsg = err.responseJSON.message;
+            }
+            if (err.responseJSON.errors != undefined &&
+                err.responseJSON.errors.phone != undefined)
+            {
+                errMsg = err.responseJSON.errors.phone[0];
+            }
+
+            // display error on toolbar
+            toolbarMsg('Error creating OTE: ' + errMsg);
+        }
+    );
+};
+
+
+
+
+///////////////////////////////////////////////////////////////////////
+// processNewlyCreatedOTE()
+//
+// Populate the "newOTEInformationStyle" div and make it visible.
+// This step is not required to create the OTE but just serves as
+// an example of how the return data can be used.
+
+var processNewlyCreatedOTE = function(oteData) {
+    var hashId = oteData.attributes.hash_id;
+    toolbarMsg('Created OTE #: ' + hashId);
+    if (hashId == null) { hashId = parseUrlParameter(oteData.link, 'eventId'); }
+
+    // console logging
+    // console.group('Newly Created OTE responseData');
+    // console.log(JSON.stringify(oteData, null, 2));
+    // console.groupEnd();
+
+    // fill in the sections of the new OTE information div
+    var a = oteData.attributes;
+    $('#recipientName').html(a.name);
+    if (a.sender != undefined) {
+        $('#senderName').html(a.sender.name);
+    }
+    $('#hashId').html(a.hash_id);
+    $('#oteLinkText').html(a.link);
+    $('#oteLinkHref').attr('href', a.link);
+    qrCodeElement = $('#oteQrCode');
+    qrCodeElement.html('');
+    qrCodeElement.qrcode({render: 'image', text: a.link});
+
+    // make the new OTE information section visible
+    showNewOTEInformationSection();
+};
+
+// helpers to hide/show the newOTEInformation section
+var showNewOTEInformationSection = function() {
+    $('#newOTEInformation').removeClass('invisible');
+};
+
+var hideNewOTEInformationSection = function() {
+    $('#newOTEInformation').addClass('invisible');
+};
+
+
+
+
+///////////////////////////////////////////////////////////////////////
+// END THE HTML TAGS
+
+</script>
+</body>
+</html>

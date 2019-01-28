@@ -1,0 +1,90 @@
+body {
+    font-family: roboto, sans-serif;
+    font-size: small;
+    color: #333333;
+}
+
+input[type=text], input[type=password] {
+    width: 175px;
+}
+
+
+.blue--text {
+    color: #1976D2;
+    font-weight: bold;
+}
+
+.toolbar {
+    border: none;
+    padding: 0;
+    background-color: #88A8C9;
+    overflow: hidden;
+    position: fixed;
+    bottom: 0.5%;
+    left: 0.5%;
+    right: 0.5%;
+    color: darkred;
+    border-radius: 2px;
+    font-style: italic;
+}
+
+.logoutButtonStyle {
+    font-style: italic;
+    height: 17px;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    background-color: #145ea8;
+    color: lightgray;
+}
+
+.createButton {
+    font-weight: bold;
+    border: none;
+    padding: 5;
+}
+.createButton:disabled {
+    background-color: gray;
+    color: darkgray;
+    cursor: auto;
+}
+.createButton:enabled {
+    background-color: #1976D2;
+    color: white;
+    cursor: pointer;
+}
+
+.validationLabel {
+    color: darkred;
+    font-style: italic;
+}
+
+.fieldInformationLabel {
+    color: #145ea8;
+    font-style: italic;
+}
+
+.invisible {
+    display: none;
+}
+
+.titleStyle {
+    background-color: #1976D2
+    color: white;
+    font-weight: bold;
+    font-size: large;
+    border: none;
+    padding: 5;
+    width: 97%;
+    top: 1;
+    left: 1;
+    display: inline-block
+}
+
+.newOTEInformationStyle {
+    border-top: 1px solid black;
+    color: gray;
+    font-family: sans-serif;
+    line-height: 1.5em;
+    background-color: gainsboro;
+}
